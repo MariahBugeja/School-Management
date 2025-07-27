@@ -139,17 +139,9 @@ if ($stmt) {
 </head>
 <body>
     <h1>Teacher Dashboard</h1>
-    <a href="logout.php" style="float:right; color:red; text-decoration:none; font-weight:bold;">Logout</a>
-    <?php if ($message): ?>
+        <?php if ($message): ?>
         <div class="message"><?= htmlspecialchars($message) ?></div>
     <?php endif; ?>
-
-<div style="text-align:center; margin: 20px 0;">
-    <a href="teacher_assignments.php" 
-       style="display:inline-block; padding:10px 15px; background:#007bff; color:#fff; text-decoration:none; border-radius:5px;">
-       ➕ Create New Assignment
-    </a>
-</div>
 
  
     <h2>Take Attendance</h2>
