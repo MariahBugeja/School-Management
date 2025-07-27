@@ -41,7 +41,7 @@ $stmt->close();
 $selected_class_id = $_GET['class_id'] ?? '';
 $selected_date = $_GET['date'] ?? date('Y-m-d');
 
-// fetching students in selected class
+// get students in selected class
 $students = [];
 if ($selected_class_id) {
     $stmt = $conn->prepare("SELECT s.student_id, u.username FROM class_student cs
@@ -143,6 +143,13 @@ if ($stmt) {
         <div class="message"><?= htmlspecialchars($message) ?></div>
     <?php endif; ?>
 
+<div style="text-align:center; margin: 20px 0;">
+    <a href="teacher_assignments.php" 
+       style="display:inline-block; padding:10px 15px; background:#007bff; color:#fff; text-decoration:none; border-radius:5px;">
+       ➕ Create New Assignment
+    </a>
+</div>
+
  
     <h2>Take Attendance</h2>
     <form method="get" id="classDateForm">
@@ -191,7 +198,6 @@ if ($stmt) {
         <p>No students found in this class.</p>
     <?php endif; ?>
 
-    <!-- Attendance history -->
     <h2>Attendance History</h2>
     <form method="get" class="filter-form" id="attendanceFilterForm">
         <input type="hidden" name="class_id" value="<?= htmlspecialchars($selected_class_id) ?>">
@@ -236,7 +242,7 @@ if ($stmt) {
 
     <script>
       let typingTimer;
-      const doneTypingInterval = 500; // half second delay
+      const doneTypingInterval = 500; 
       const filterNameInput = document.getElementById('filter_name');
 
       filterNameInput.addEventListener('keyup', () => {
@@ -250,5 +256,49 @@ if ($stmt) {
         clearTimeout(typingTimer);
       });
     </script>
+    <?php
+$teacher_assignments = [];
+$stmt = $conn->prepare("SELECT a.assignment_id, a.title, a.deadline, c.class_name 
+                        FROM assignments a
+                        JOIN classes c ON a.class_id = c.class_id
+                        WHERE a.teacher_id = ?
+                        ORDER BY a.deadline DESC");
+$stmt->bind_param("i", $_SESSION['teacher_id']);
+$stmt->execute();
+$result = $stmt->get_result();
+while ($row = $result->fetch_assoc()) {
+    $teacher_assignments[] = $row;
+}
+$stmt->close();
+?>
+
+<h2>Your Assignments</h2>
+<?php if ($teacher_assignments): ?>
+    <table>
+        <thead>
+            <tr>
+                <th>Class</th>
+                <th>Title</th>
+                <th>Deadline</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php foreach ($teacher_assignments as $a): ?>
+                <tr>
+                    <td><?= htmlspecialchars($a['class_name']) ?></td>
+                    <td><?= htmlspecialchars($a['title']) ?></td>
+                    <td><?= htmlspecialchars($a['deadline']) ?></td>
+                    <td>
+                        <a href="teacher_grades.php?assignment_id=<?= $a['assignment_id'] ?>">Grade</a>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </tbody>
+    </table>
+<?php else: ?>
+    <p>No assignments created yet.</p>
+<?php endif; ?>
+
 </body>
 </html>
