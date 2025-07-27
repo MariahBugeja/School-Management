@@ -1,6 +1,9 @@
 <?php
 session_start();
 include_once __DIR__ . '/includes/db.php';
+include 'includes/header_teacher.php'; 
+
+
 
 // Check teacher logged in
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'teacher') {
