@@ -27,25 +27,38 @@ if (password_verify($password, $user['password'])) {
     echo "Password verification: SUCCESS<br>";
 
     // Set session
-    $_SESSION['user_id'] = $user['user_id'];
-    $_SESSION['username'] = $user['username'];
-    $_SESSION['role'] = $user['role'];
+$_SESSION['user_id'] = $user['user_id'];
+$_SESSION['username'] = $user['username'];
+$_SESSION['role'] = $user['role'];
 
-    // Redirect based on role
-    if ($user['role'] === 'admin') {
-        header('Location: admin_dashboard.php');
-        exit();
-    } elseif ($user['role'] === 'teacher') {
-        header('Location: teacher_dashboard.php');
-        exit();
-    } elseif ($user['role'] === 'student') {
-        header('Location: student_dashboard.php');
-        exit();
-    } else {
-        // fallback redirect or error
-        header('Location: login.php');
-        exit();
+// If teacher, get teacher_id from teachers table and save in session
+if ($user['role'] === 'teacher') {
+    $stmt2 = $conn->prepare("SELECT teacher_id FROM teachers WHERE user_id = ?");
+    $stmt2->bind_param("i", $user['user_id']);
+    $stmt2->execute();
+    $stmt2->bind_result($teacher_id);
+    if ($stmt2->fetch()) {
+        $_SESSION['teacher_id'] = $teacher_id;
     }
+    $stmt2->close();
+}
+
+// Redirect based on role
+if ($user['role'] === 'admin') {
+    header('Location: admin_dashboard.php');
+    exit();
+} elseif ($user['role'] === 'teacher') {
+    header('Location: teacher_dashboard.php');
+    exit();
+} elseif ($user['role'] === 'student') {
+    header('Location: student_dashboard.php');
+    exit();
+} else {
+    // fallback redirect or error
+    header('Location: login.php');
+    exit();
+}
+
 } else {
     echo "Password verification: FAILED<br>";
     $message = 'Invalid username or password.';
