@@ -1,10 +1,9 @@
 <?php
 session_start();
 
-// Remove all session variables
 session_unset();
 
-// Destroy the session
+// CLOSE session
 session_destroy();
 
 // Redirect to login page

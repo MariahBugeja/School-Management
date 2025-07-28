@@ -33,28 +33,65 @@ while ($row = $result->fetch_assoc()) {
 }
 $stmt->close();
 
-// get assignments for classes
-$class_ids = array_column($classes, 'class_id');
+// get optional class_id filter from URL
+$class_id = $_GET['class_id'] ?? null;
+if ($class_id !== null && !is_numeric($class_id)) {
+    die("Invalid class ID.");
+}
+
 $assignments = [];
 
-if ($class_ids) {
-    $placeholders = implode(',', array_fill(0, count($class_ids), '?'));
-    $types = str_repeat('i', count($class_ids));
+if ($class_id) {
+    // Verify student enrollment in this class
+    $stmt = $conn->prepare("SELECT COUNT(*) FROM class_student WHERE class_id = ? AND student_id = ?");
+    $stmt->bind_param("ii", $class_id, $student_id);
+    $stmt->execute();
+    $stmt->bind_result($is_enrolled);
+    $stmt->fetch();
+    $stmt->close();
 
-    $sql = "SELECT a.assignment_id, a.class_id, a.title, a.description, a.file_path, a.deadline, c.class_name
-            FROM assignments a
-            JOIN classes c ON a.class_id = c.class_id
-            WHERE a.class_id IN ($placeholders)
-            ORDER BY a.deadline DESC";
+    if (!$is_enrolled) {
+        die("You are not enrolled in this class.");
+    }
 
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param($types, ...$class_ids);
+    // Fetch assignments for selected class only
+    $stmt = $conn->prepare("
+        SELECT a.assignment_id, a.class_id, a.title, a.description, a.file_path, a.deadline, c.class_name
+        FROM assignments a
+        JOIN classes c ON a.class_id = c.class_id
+        WHERE a.class_id = ?
+        ORDER BY a.deadline DESC
+    ");
+    $stmt->bind_param("i", $class_id);
     $stmt->execute();
     $result = $stmt->get_result();
     while ($row = $result->fetch_assoc()) {
         $assignments[] = $row;
     }
     $stmt->close();
+
+} else {
+    // Fetch all assignments for all enrolled classes
+    $class_ids = array_column($classes, 'class_id');
+    if ($class_ids) {
+        $placeholders = implode(',', array_fill(0, count($class_ids), '?'));
+        $types = str_repeat('i', count($class_ids));
+
+        $sql = "SELECT a.assignment_id, a.class_id, a.title, a.description, a.file_path, a.deadline, c.class_name
+                FROM assignments a
+                JOIN classes c ON a.class_id = c.class_id
+                WHERE a.class_id IN ($placeholders)
+                ORDER BY a.deadline DESC";
+
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param($types, ...$class_ids);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $assignments[] = $row;
+        }
+        $stmt->close();
+    }
 }
 
 //  submission Upload
@@ -115,11 +152,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['assignment_id'])) {
     th, td { padding: 8px 12px; border: 1px solid #ddd; }
     th { background: #f2f2f2; }
     form { margin: 0; }
+    .back-link {
+        display: inline-block;
+        margin-bottom: 15px;
+        text-decoration: none;
+        color: #007bff;
+    }
+    .back-link:hover {
+        text-decoration: underline;
+    }
 </style>
 </head>
 <body>
 <h1>Assignments</h1>
-<a href="student_dashboard.php" style="text-decoration:none;">&larr; Back to Dashboard</a>
+
+<a href="student_dashboard.php" class="back-link">&larr; Back to Dashboard</a>
 
 <?php if ($message): ?>
     <div class="message"><?= htmlspecialchars($message) ?></div>
@@ -129,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['assignment_id'])) {
     <table>
         <thead>
             <tr>
-                 <th>Class</th>
+                <th>Class</th>
                 <th>Title</th>
                 <th>Description</th>
                 <th>Deadline</th>
@@ -152,7 +199,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['assignment_id'])) {
                 <td><?= htmlspecialchars($a['title']) ?></td>
                 <td><?= nl2br(htmlspecialchars($a['description'])) ?></td>
                 <td><?= htmlspecialchars($a['deadline']) ?></td>
-                <td><a href="<?= htmlspecialchars($a['file_path']) ?>" target="_blank">Download</a></td>
+                <td>
+                    <?php if ($a['file_path']): ?>
+                        <a href="<?= htmlspecialchars($a['file_path']) ?>" target="_blank">Download</a>
+                    <?php else: ?>
+                        No file
+                    <?php endif; ?>
+                </td>
                 <td>
                     <?php if ($submission): ?>
                         <a href="<?= htmlspecialchars($submission['file_path']) ?>" target="_blank">View Submission</a><br>

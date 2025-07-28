@@ -13,9 +13,11 @@ if (session_status() === PHP_SESSION_NONE) {
   body {
     font-family: Arial, sans-serif;
     margin: 0;
-    background: #f2f2f2;
+    background: #f2f2ff;
   }
   .navbar {
+    max-width:900px;
+    margin:0 auto;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -44,10 +46,10 @@ if (session_status() === PHP_SESSION_NONE) {
     transition: color 0.3s ease;
   }
   .navbar ul li a:hover {
-    color: #007bff;
+    color: #007bfd;
   }
   .logout {
-    background: #007bff;
+    background: #007bfd;
     color: white;
     padding: 5px 12px;
     border-radius: 5px;
@@ -56,7 +58,7 @@ if (session_status() === PHP_SESSION_NONE) {
     transition: background 0.3s ease;
   }
   .logout:hover {
-    background: #0056b3;
+    background: #0156b0;
   }
 </style>
 </head>
@@ -67,7 +69,6 @@ if (session_status() === PHP_SESSION_NONE) {
     </div>
     <ul>
       <li><a href="student_dashboard.php">Dashboard</a></li>
-      <li><a href="student_classes.php">My Classes</a></li>
       <li><a href="student_assignments.php">Assignments</a></li>
       <li><a href="student_grades.php">Grades</a></li>
       <li><a href="student_profile.php">Profile</a></li>
