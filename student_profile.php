@@ -12,9 +12,9 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
 $user_id = $_SESSION['user_id'];
 $message = "";
 
-// Fetch current student data
+// Fetch current student data (including DoB)
 $stmt = $conn->prepare("
-    SELECT u.username, u.email, s.student_id 
+    SELECT u.username, u.email, s.student_id, s.date_of_birth 
     FROM users u
     JOIN students s ON u.user_id = s.user_id
     WHERE u.user_id = ?
@@ -33,7 +33,7 @@ if (!$student) {
 $student_id = $student['student_id'];
 $attendance_rate = null;
 
-// Total attendance records for this student
+// Total attendance records
 $stmt = $conn->prepare("SELECT COUNT(*) FROM attendance WHERE student_id = ?");
 $stmt->bind_param("i", $student_id);
 $stmt->execute();
@@ -41,7 +41,7 @@ $stmt->bind_result($total_classes);
 $stmt->fetch();
 $stmt->close();
 
-// Count of classes marked 'Present'
+// Present count
 $stmt = $conn->prepare("SELECT COUNT(*) FROM attendance WHERE student_id = ? AND status = 'Present'");
 $stmt->bind_param("i", $student_id);
 $stmt->execute();
@@ -49,22 +49,19 @@ $stmt->bind_result($present_count);
 $stmt->fetch();
 $stmt->close();
 
-if ($total_classes > 0) {
-    $attendance_rate = round(($present_count / $total_classes) * 100, 2);
-} else {
-    $attendance_rate = "N/A";
-}
+$attendance_rate = ($total_classes > 0) ? round(($present_count / $total_classes) * 100, 2) : "N/A";
 
 // Handle profile update
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username']);
     $email = trim($_POST['email']);
     $password = trim($_POST['password']);
+    $dob = !empty($_POST['date_of_birth']) ? $_POST['date_of_birth'] : null;
 
     if (empty($username) || empty($email)) {
         $message = "Username and email are required.";
     } else {
-        // Update query
+        // Update users table
         if (!empty($password)) {
             $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $conn->prepare("UPDATE users SET username = ?, email = ?, password = ? WHERE user_id = ?");
@@ -81,10 +78,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Error updating profile.";
         }
         $stmt->close();
+
+        // Update date of birth in students table
+        $stmt = $conn->prepare("UPDATE students SET date_of_birth = ? WHERE user_id = ?");
+        $stmt->bind_param("si", $dob, $user_id);
+        $stmt->execute();
+        $stmt->close();
     }
 
     // Refresh student info
-    $stmt = $conn->prepare("SELECT username, email FROM users WHERE user_id = ?");
+    $stmt = $conn->prepare("
+        SELECT u.username, u.email, s.date_of_birth 
+        FROM users u
+        JOIN students s ON u.user_id = s.user_id
+        WHERE u.user_id = ?
+    ");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -104,13 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <h1>Your Profile</h1>
 
         <p><strong>Attendance Rate:</strong> 
-            <?php
-                if ($attendance_rate === "N/A") {
-                    echo "No attendance data available.";
-                } else {
-                    echo $attendance_rate . "%";
-                }
-            ?>
+            <?= $attendance_rate === "N/A" ? "No attendance data available." : $attendance_rate . "%" ?>
         </p>
 
         <?php if ($message): ?>
@@ -123,6 +125,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <label for="email">Email</label>
             <input type="email" name="email" id="email" value="<?= htmlspecialchars($student['email']) ?>" required>
+
+            <label for="date_of_birth">Date of Birth</label>
+            <input type="date" name="date_of_birth" id="date_of_birth" value="<?= htmlspecialchars($student['date_of_birth'] ?? '') ?>">
 
             <label for="password">New Password (leave blank if not changing)</label>
             <input type="password" name="password" id="password" placeholder="Enter new password">

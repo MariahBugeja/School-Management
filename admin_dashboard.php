@@ -1,6 +1,8 @@
 <?php
 session_start();
 include_once __DIR__ . '/includes/db.php';
+include __DIR__ . '/includes/header_admin.php';
+
 
 // Check if admin
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
@@ -29,7 +31,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($stmt->execute()) {
                     $message = "User added successfully.";
 
-                    // If role is teacher or student, insert in respective table
                     $new_user_id = $stmt->insert_id;
                     if ($role === 'teacher') {
                         $stmt2 = $conn->prepare("INSERT INTO teachers (user_id) VALUES (?)");
@@ -40,6 +41,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     } elseif ($role === 'student') {
                         $stmt2 = $conn->prepare("INSERT INTO students (user_id) VALUES (?)");
+                        if ($stmt2) {
+                            $stmt2->bind_param("i", $new_user_id);
+                            $stmt2->execute();
+                            $stmt2->close();
+                        }
+                    } elseif ($role === 'admin') {
+                        $stmt2 = $conn->prepare("INSERT INTO admin (user_id) VALUES (?)");
                         if ($stmt2) {
                             $stmt2->bind_param("i", $new_user_id);
                             $stmt2->execute();
@@ -82,11 +90,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     elseif ($action === 'delete_user') {
         $user_id = intval($_POST['user_id'] ?? 0);
         if ($user_id) {
-            // Delete related teacher/student rows first (if any)
             $conn->begin_transaction();
             try {
                 $conn->query("DELETE FROM teachers WHERE user_id = $user_id");
                 $conn->query("DELETE FROM students WHERE user_id = $user_id");
+                $conn->query("DELETE FROM admin WHERE user_id = $user_id");
                 $stmt = $conn->prepare("DELETE FROM users WHERE user_id = ?");
                 if ($stmt) {
                     $stmt->bind_param("i", $user_id);
@@ -149,7 +157,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     elseif ($action === 'delete_class') {
         $class_id = intval($_POST['class_id'] ?? 0);
         if ($class_id) {
-            // Delete all related class_student assignments first
             $conn->begin_transaction();
             try {
                 $conn->query("DELETE FROM class_student WHERE class_id = $class_id");
@@ -174,7 +181,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $student_id = intval($_POST['student_id'] ?? 0);
 
         if ($class_id && $student_id) {
-            // Check if already assigned
             $stmt = $conn->prepare("SELECT COUNT(*) FROM class_student WHERE class_id = ? AND student_id = ?");
             if ($stmt) {
                 $stmt->bind_param("ii", $class_id, $student_id);
@@ -286,6 +292,19 @@ if ($stmt) {
         $users[] = $row;
     }
     $stmt->close();
+}
+
+// Fetch all admins
+$admins = [];
+$admin_sql = "SELECT a.admin_id, u.user_id, u.username, u.email 
+              FROM admin a 
+              JOIN users u ON a.user_id = u.user_id
+              ORDER BY u.username";
+$result = $conn->query($admin_sql);
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $admins[] = $row;
+    }
 }
 
 // Fetch all classes with teacher usernames, filtered by class name (LIKE)
@@ -402,8 +421,6 @@ if ($stmt) {
 </head>
 <body>
 
-<a href="logout.php" class="logout">Logout</a>
-<h1>Admin Dashboard</h1>
 
 <?php if ($message): ?>
     <div class="message <?= strpos($message, 'successfully') !== false ? 'success' : 'error' ?>">
@@ -421,7 +438,6 @@ if ($stmt) {
         <option value="teacher" <?= $user_filter_role === 'teacher' ? 'selected' : '' ?>>Teacher</option>
         <option value="student" <?= $user_filter_role === 'student' ? 'selected' : '' ?>>Student</option>
     </select>
-    <!-- Keep other filters in URL -->
     <?php if ($class_filter_name !== ''): ?>
         <input type="hidden" name="class_name" value="<?= htmlspecialchars($class_filter_name) ?>">
     <?php endif; ?>
@@ -447,7 +463,7 @@ if ($stmt) {
                 <input type="hidden" name="user_id" value="<?= $user['user_id'] ?>" />
                 <td><input type="text" name="username" value="<?= htmlspecialchars($user['username']) ?>" required /></td>
                 <td><input type="email" name="email" value="<?= htmlspecialchars($user['email']) ?>" required /></td>
-                <td><?= htmlspecialchars($user['role']) ?></td>
+                <td><?= htmlspecialchars(ucfirst($user['role'])) ?></td>
                 <td>
                     <button type="submit">Update</button>
             </form>
@@ -466,19 +482,62 @@ if ($stmt) {
                 <td><input type="email" name="email" required placeholder="New email" /></td>
                 <td>
                     <select name="role" required>
-                        <option value="">--Role--</option>
+                        <option value="">--Select Role--</option>
                         <option value="teacher">Teacher</option>
                         <option value="student">Student</option>
                     </select>
                 </td>
+                <td><input type="password" name="password" required placeholder="Password" />
+                    <button type="submit">Add User</button></td>
+            </form>
+        </tr>
+    </tbody>
+</table>
+
+<!-- ADMINS SECTION -->
+<h2>Admins</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>Username</th><th>Email</th><th>Password (leave blank to keep)</th><th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <?php foreach ($admins as $admin): ?>
+        <tr>
+            <form method="post" class="inline" action="">
+                <input type="hidden" name="action" value="update_user" />
+                <input type="hidden" name="user_id" value="<?= $admin['user_id'] ?>" />
+                <td><input type="text" name="username" value="<?= htmlspecialchars($admin['username']) ?>" required /></td>
+                <td><input type="email" name="email" value="<?= htmlspecialchars($admin['email']) ?>" required /></td>
+                <td><input type="password" name="password" placeholder="New password" autocomplete="new-password" /></td>
                 <td>
-                    <input type="password" name="password" required placeholder="Password" />
-                    <button type="submit">Add User</button>
+                    <button type="submit">Update</button>
+            </form>
+            <form method="post" class="inline" action="" onsubmit="return confirm('Are you sure you want to delete this admin?');">
+                <input type="hidden" name="action" value="delete_user" />
+                <input type="hidden" name="user_id" value="<?= $admin['user_id'] ?>" />
+                <button type="submit" style="background-color:#dc3545; color:#fff;">Delete</button>
+            </form>
+                </td>
+        </tr>
+        <?php endforeach; ?>
+        <tr>
+            <form method="post" action="">
+                <input type="hidden" name="action" value="create_user" />
+                <td><input type="text" name="username" required placeholder="New admin username" /></td>
+                <td><input type="email" name="email" required placeholder="New admin email" /></td>
+                <td><input type="password" name="password" required placeholder="Password" /></td>
+                <td>
+                    <input type="hidden" name="role" value="admin" />
+                    <button type="submit">Add Admin</button>
                 </td>
             </form>
         </tr>
     </tbody>
 </table>
+
 
 <!-- CLASSES SECTION -->
 <h2>Classes</h2>
@@ -487,7 +546,6 @@ if ($stmt) {
     <label for="class_name">Filter by Class Name:</label>
     <input type="text" id="class_name" name="class_name" value="<?= htmlspecialchars($class_filter_name) ?>" />
     <button type="submit">Filter</button>
-    <!-- Keep other filters in URL -->
     <?php if ($user_filter_role !== ''): ?>
         <input type="hidden" name="user_role" value="<?= htmlspecialchars($user_filter_role) ?>">
     <?php endif; ?>
@@ -525,7 +583,7 @@ if ($stmt) {
                 <td>
                     <button type="submit">Update</button>
             </form>
-            <form method="post" class="inline" action="" onsubmit="return confirm('Are you sure you want to delete this class?');">
+            <form method="post" class="inline" action="" onsubmit="return confirm('Delete this class?');">
                 <input type="hidden" name="action" value="delete_class" />
                 <input type="hidden" name="class_id" value="<?= $class['class_id'] ?>" />
                 <button type="submit" style="background-color:#dc3545; color:#fff;">Delete</button>
@@ -533,7 +591,6 @@ if ($stmt) {
                 </td>
         </tr>
         <?php endforeach; ?>
-
         <tr>
             <form method="post" action="">
                 <input type="hidden" name="action" value="create_class" />
@@ -552,13 +609,13 @@ if ($stmt) {
     </tbody>
 </table>
 
-<!-- STUDENTS IN CLASSES -->
-<h2>Students in Classes</h2>
+<!-- CLASS STUDENTS SECTION -->
+<h2>Class Students</h2>
 
 <form method="get" class="filter-form">
     <label for="sc_class">Filter by Class:</label>
     <select id="sc_class" name="sc_class" onchange="this.form.submit()">
-        <option value="">--All Classes--</option>
+        <option value="">-- All Classes --</option>
         <?php foreach ($classes as $class): ?>
             <option value="<?= $class['class_id'] ?>" <?= $sc_filter_class == $class['class_id'] ? 'selected' : '' ?>>
                 <?= htmlspecialchars($class['class_name']) ?>
@@ -568,7 +625,7 @@ if ($stmt) {
 
     <label for="sc_student">Filter by Student:</label>
     <select id="sc_student" name="sc_student" onchange="this.form.submit()">
-        <option value="">--All Students--</option>
+        <option value="">-- All Students --</option>
         <?php foreach ($students as $student): ?>
             <option value="<?= $student['student_id'] ?>" <?= $sc_filter_student == $student['student_id'] ? 'selected' : '' ?>>
                 <?= htmlspecialchars($student['username']) ?>
@@ -576,7 +633,6 @@ if ($stmt) {
         <?php endforeach; ?>
     </select>
 
-    <!-- Keep other filters in URL -->
     <?php if ($user_filter_role !== ''): ?>
         <input type="hidden" name="user_role" value="<?= htmlspecialchars($user_filter_role) ?>">
     <?php endif; ?>
